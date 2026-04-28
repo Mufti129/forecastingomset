@@ -1,3 +1,4 @@
+
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -23,9 +24,8 @@ st.title("🗺️ Dashboard Prediksi Omzet & Analisis Lokasi")
 # ==========================================
 df = load_data()
 
-# ⚠️ WAJIB: pastikan kompetitor valid
+# pastikan data valid
 df = df.dropna(subset=['lat','lon','lat_komp','lon_komp'])
-
 df['lat'] = df['lat'].astype(float)
 df['lon'] = df['lon'].astype(float)
 df['lat_komp'] = df['lat_komp'].astype(float)
@@ -43,37 +43,61 @@ model_choice = st.sidebar.selectbox(
 model, features = train_model(df, model_choice)
 
 # ==========================================
+# 🔥 TOP 5 LOKASI TERBAIK
+# ==========================================
+top5 = df.sort_values(by='avg_omzet', ascending=False).head(5)
+
+# ==========================================
 # LAYOUT
 # ==========================================
 col1, col2 = st.columns([2,1])
 
 # ==========================================
-# 🗺️ MAP + HEATMAP + KOMPETITOR (FIX)
+# 🗺️ MAP
 # ==========================================
 with col1:
-    st.subheader("🗺️ Peta Lokasi & Analisis Kompetitor")
+    st.subheader("🗺️ Peta Lokasi & Analisis Bisnis")
 
     center_lat = df['lat'].mean()
     center_lon = df['lon'].mean()
 
-    # MAP AWAL
     m = folium.Map(location=[center_lat, center_lon], zoom_start=11)
 
-    # HEATMAP
+    # 🔥 HEATMAP
     heat_data = [[row['lat'], row['lon'], row['avg_omzet']] for _, row in df.iterrows()]
     HeatMap(heat_data, radius=15).add_to(m)
 
-    # MARKER CABANG
+    # ==========================================
+    # 🔵 MARKER CABANG BIASA
+    # ==========================================
     for _, row in df.iterrows():
+
+        # cek apakah termasuk TOP 5
+        if row.name in top5.index:
+            color = 'gold'
+            radius = 9
+        else:
+            color = 'blue'
+            radius = 5
+
         folium.CircleMarker(
             location=[row['lat'], row['lon']],
-            radius=5,
-            color='blue',
+            radius=radius,
+            color=color,
             fill=True,
-            popup=f"Omzet: Rp {row['avg_omzet']:,.0f}"
+            fill_opacity=0.8,
+            popup=folium.Popup(
+                f"""
+                <b>{row.get('nama_cabang','Cabang')}</b><br>
+                Omzet: Rp {row['avg_omzet']:,.0f}<br>
+                Kompetitor: {row['jumlah_kompetitor']}<br>
+                Wilayah: {row['kategori_wilayah']}
+                """,
+                max_width=250
+            )
         ).add_to(m)
 
-    # RENDER MAP (AMBIL CLICK)
+    # render map
     map_data = st_folium(m, width=800, height=500)
 
     clicked_lat, clicked_lon = None, None
@@ -82,12 +106,11 @@ with col1:
         clicked_lat = map_data["last_clicked"]["lat"]
         clicked_lon = map_data["last_clicked"]["lng"]
 
-# ==========================================
-# 🔥 MAP DETAIL (CABANG vs KOMPETITOR)
-# ==========================================
+    # ==========================================
+    # 🔴 DETAIL CABANG vs KOMPETITOR
+    # ==========================================
     if clicked_lat is not None:
 
-        # cari cabang terdekat
         df['distance_click'] = (
             (df['lat'] - clicked_lat)**2 + (df['lon'] - clicked_lon)**2
         )
@@ -96,48 +119,47 @@ with col1:
 
         cabang_lat = nearest['lat']
         cabang_lon = nearest['lon']
-
         komp_lat = nearest['lat_komp']
         komp_lon = nearest['lon_komp']
 
-        # MAP BARU (INI KUNCI)
+        # MAP DETAIL
         m2 = folium.Map(location=[cabang_lat, cabang_lon], zoom_start=14)
 
-        # CABANG
+        # cabang
         folium.Marker(
             [cabang_lat, cabang_lon],
-            popup="Cabang Terpilih",
+            popup=f"{nearest.get('nama_cabang','Cabang')}",
             icon=folium.Icon(color="blue")
         ).add_to(m2)
 
-        # KOMPETITOR
+        # kompetitor
         folium.Marker(
             [komp_lat, komp_lon],
             popup="Kompetitor Terdekat",
             icon=folium.Icon(color="red")
         ).add_to(m2)
 
-        # GARIS
+        # garis
         folium.PolyLine(
             [[cabang_lat, cabang_lon], [komp_lat, komp_lon]],
             color="red",
             weight=4
         ).add_to(m2)
 
-        st.success(f"📍 Cabang: {cabang_lat:.6f}, {cabang_lon:.6f}")
-        st.warning(f"🏪 Kompetitor: {komp_lat:.6f}, {komp_lon:.6f}")
+        st.success(f"📍 Cabang: {nearest.get('nama_cabang','Cabang')}")
+        st.warning(f"🏪 Kompetitor Terdekat")
 
-        # tampilkan map detail
         st_folium(m2, width=800, height=500)
 
+        selected_lat, selected_lon = cabang_lat, cabang_lon
     else:
-        clicked_lat, clicked_lon = -6.2, 106.8
+        selected_lat, selected_lon = -6.2, 106.8
 
 # ==========================================
 # 📥 INPUT + PREDIKSI
 # ==========================================
 with col2:
-    st.subheader("📥 Input Data Lokasi")
+    st.subheader("📥 Simulasi Lokasi Baru")
 
     input_data = {
         'kemiskinan': st.number_input("Kemiskinan", 0.0, 1.0, 0.08),
@@ -156,12 +178,11 @@ with col2:
         'kategori_wilayah': st.selectbox("Wilayah", ['Perkotaan','Pedesaan']),
         'jalan': st.selectbox("Jalan", ['residential','primary','tertiary']),
         'jarak_pasar': st.number_input("Jarak Pasar", 0, 5000, 100),
-        'lat': clicked_lat,
-        'lon': clicked_lon
+        'lat': selected_lat,
+        'lon': selected_lon
     }
 
     input_df = pd.DataFrame([input_data])
-
     pred = predict(model, input_df)
 
     st.subheader("💰 Prediksi Omzet")
@@ -191,6 +212,12 @@ colA, colB, colC = st.columns(3)
 colA.metric("MAE", f"Rp {mae:,.0f}")
 colB.metric("R2", f"{r2:.3f}")
 colC.metric("CV Score", f"{cv.mean():.3f}")
+
+# ==========================================
+# 🔥 TOP 5 TABLE
+# ==========================================
+st.subheader("🏆 Top 5 Lokasi Terbaik")
+st.dataframe(top5[['nama_cabang','avg_omzet','jumlah_kompetitor']])
 
 # ==========================================
 # DATA
