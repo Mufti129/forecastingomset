@@ -35,26 +35,51 @@ model_choice = st.sidebar.selectbox(
 model, features, preprocessor = train_model(df, model_choice)
 
 # ==========================================
-# MAP
+# PILIH MODE INPUT LOKASI
 # ==========================================
-st.subheader("🗺️ Klik Peta untuk Pilih Lokasi")
+st.subheader("🗺️ Pilih Lokasi")
 
-m = create_map()
-
-# tampilkan cabang
-add_data_points(m, df)
-
-map_data = render_map(m)
-
-lat, lon = get_clicked_location(map_data)
-
-# marker user
-add_user_marker(m, lat, lon)
-
-st.success(f"📍 Lokasi: {lat:.6f}, {lon:.6f}")
+input_mode = st.radio(
+    "Metode input lokasi:",
+    ["Klik Peta", "Input Manual"]
+)
 
 # ==========================================
-# INPUT DATA
+# MODE 1: KLIK PETA
+# ==========================================
+if input_mode == "Klik Peta":
+
+    m = create_map()
+
+    # tampilkan semua cabang
+    add_data_points(m, df)
+
+    map_data = render_map(m)
+
+    lat, lon = get_clicked_location(map_data)
+
+    add_user_marker(m, lat, lon)
+
+    st.success(f"📍 Lokasi dari peta: {lat:.6f}, {lon:.6f}")
+
+# ==========================================
+# MODE 2: INPUT MANUAL
+# ==========================================
+else:
+    st.info("Masukkan koordinat secara manual")
+
+    lat = st.number_input("Latitude", value=-6.2, format="%.6f")
+    lon = st.number_input("Longitude", value=106.8, format="%.6f")
+
+    # tetap tampil map biar visual
+    m = create_map(lat, lon, zoom=12)
+    add_user_marker(m, lat, lon)
+    render_map(m)
+
+    st.success(f"📍 Lokasi manual: {lat:.6f}, {lon:.6f}")
+
+# ==========================================
+# INPUT DATA FITUR
 # ==========================================
 st.sidebar.header("📥 Input Data")
 
@@ -77,6 +102,10 @@ input_data = {
     'jarak_pasar': st.sidebar.number_input("Jarak Pasar", 0, 5000, 100)
 }
 
+# tambahkan lat lon ke input
+input_data['lat'] = lat
+input_data['lon'] = lon
+
 input_df = pd.DataFrame([input_data])
 
 # ==========================================
@@ -88,7 +117,7 @@ st.subheader("💰 Hasil Prediksi")
 st.success(f"Estimasi Omzet: Rp {prediction[0]:,.0f}")
 
 # ==========================================
-# EVALUASI
+# EVALUASI MODEL
 # ==========================================
 X = df[features]
 y = df['avg_omzet']
@@ -108,7 +137,7 @@ st.write(f"R2: {r2:.4f}")
 st.write(f"CV Rata-rata: {cv.mean():.4f}")
 
 # ==========================================
-# OUTPUT MODEL
+# INSIGHT MODEL
 # ==========================================
 st.subheader("📈 Insight Model")
 
