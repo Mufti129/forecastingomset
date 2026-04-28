@@ -24,7 +24,7 @@ st.title("🗺️ Dashboard Prediksi Omzet & Analisis Lokasi")
 df = load_data()
 
 # ==========================================
-# PILIH MODEL
+# MODEL
 # ==========================================
 st.sidebar.header("⚙️ Model")
 model_choice = st.sidebar.selectbox(
@@ -35,50 +35,103 @@ model_choice = st.sidebar.selectbox(
 model, features = train_model(df, model_choice)
 
 # ==========================================
-# LAYOUT (2 KOLOM)
+# LAYOUT
 # ==========================================
 col1, col2 = st.columns([2,1])
 
 # ==========================================
-# 🗺️ MAP + HEATMAP
+# 🗺️ MAP + HEATMAP + KOMPETITOR
 # ==========================================
 with col1:
-    st.subheader("🗺️ Peta Lokasi & Heatmap Omzet")
+    st.subheader("🗺️ Peta Lokasi & Analisis Kompetitor")
 
-    # center map
     center_lat = df['lat'].mean()
     center_lon = df['lon'].mean()
 
     m = folium.Map(location=[center_lat, center_lon], zoom_start=11)
 
-    # 🔥 HEATMAP (berdasarkan omzet)
+    # 🔥 HEATMAP OMZET
     heat_data = [
         [row['lat'], row['lon'], row['avg_omzet']]
         for _, row in df.iterrows()
     ]
-
     HeatMap(heat_data, radius=15).add_to(m)
 
-    # 🔵 titik cabang
+    # 🔵 MARKER CABANG
     for _, row in df.iterrows():
         folium.CircleMarker(
             location=[row['lat'], row['lon']],
-            radius=5,
-            popup=f"{row.get('nama_cabang','Cabang')}<br>Omzet: Rp {row['avg_omzet']:,.0f}",
+            radius=6,
+            popup=f"""
+            <b>{row.get('nama_cabang','Cabang')}</b><br>
+            Omzet: Rp {row['avg_omzet']:,.0f}
+            """,
             color='blue',
             fill=True
         ).add_to(m)
 
-    # render map
+    # tampilkan map
     map_data = st_folium(m, width=800, height=500)
 
-    # ambil klik
+    clicked_lat, clicked_lon = None, None
+
     if map_data and map_data.get("last_clicked"):
-        lat = map_data["last_clicked"]["lat"]
-        lon = map_data["last_clicked"]["lng"]
-        st.success(f"📍 Lokasi dipilih: {lat:.6f}, {lon:.6f}")
+        clicked_lat = map_data["last_clicked"]["lat"]
+        clicked_lon = map_data["last_clicked"]["lng"]
+
+        st.success(f"📍 Lokasi dipilih: {clicked_lat:.6f}, {clicked_lon:.6f}")
+
+    # ==========================================
+    # 🔥 ANALISIS KOMPETITOR TERDEKAT
+    # ==========================================
+    if clicked_lat is not None:
+
+        # cari cabang terdekat dari titik klik
+        df['distance_click'] = (
+            (df['lat'] - clicked_lat)**2 + (df['lon'] - clicked_lon)**2
+        )
+
+        nearest = df.loc[df['distance_click'].idxmin()]
+
+        cabang_lat = nearest['lat']
+        cabang_lon = nearest['lon']
+
+        komp_lat = nearest['lat_komp']
+        komp_lon = nearest['lon_komp']
+
+        # marker cabang
+        folium.Marker(
+            [cabang_lat, cabang_lon],
+            popup="Cabang Terpilih",
+            icon=folium.Icon(color="blue")
+        ).add_to(m)
+
+        # marker kompetitor
+        folium.Marker(
+            [komp_lat, komp_lon],
+            popup="Kompetitor Terdekat",
+            icon=folium.Icon(color="red")
+        ).add_to(m)
+
+        # garis penghubung
+        folium.PolyLine(
+            locations=[[cabang_lat, cabang_lon], [komp_lat, komp_lon]],
+            color="red",
+            weight=3
+        ).add_to(m)
+
+        # hitung jarak sederhana
+        distance = np.sqrt(
+            (cabang_lat - komp_lat)**2 + (cabang_lon - komp_lon)**2
+        )
+
+        st.info(f"📏 Jarak ke kompetitor: {distance:.4f} (derajat koordinat)")
+
+        # render ulang map
+        st_folium(m, width=800, height=500)
+
     else:
-        lat, lon = -6.2, 106.8
+        clicked_lat, clicked_lon = -6.2, 106.8
 
 # ==========================================
 # 📥 INPUT + PREDIKSI
@@ -103,13 +156,12 @@ with col2:
         'kategori_wilayah': st.selectbox("Wilayah", ['Perkotaan','Pedesaan']),
         'jalan': st.selectbox("Jalan", ['residential','primary','tertiary']),
         'jarak_pasar': st.number_input("Jarak Pasar", 0, 5000, 100),
-        'lat': lat,
-        'lon': lon
+        'lat': clicked_lat,
+        'lon': clicked_lon
     }
 
     input_df = pd.DataFrame([input_data])
 
-    # 🔥 PREDIKSI
     pred = predict(model, input_df)
 
     st.subheader("💰 Prediksi Omzet")
@@ -136,7 +188,6 @@ mae = mean_absolute_error(y_real, pred_real)
 r2 = r2_score(y_real, pred_real)
 
 colA, colB, colC = st.columns(3)
-
 colA.metric("MAE", f"Rp {mae:,.0f}")
 colB.metric("R2", f"{r2:.3f}")
 colC.metric("CV Score", f"{cv.mean():.3f}")
@@ -163,7 +214,7 @@ else:
     st.bar_chart(pd.Series(coef, index=feat_names).sort_values(ascending=False).head(10))
 
 # ==========================================
-# 📂 DATA
+# DATA
 # ==========================================
 with st.expander("📂 Lihat Data"):
     st.dataframe(df.head(50))
