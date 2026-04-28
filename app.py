@@ -1,5 +1,5 @@
 # ==========================================
-# 🚀 APP PREDIKSI OMZET LOKASI USAHA
+#  APP PREDIKSI OMZET LOKASI USAHA
 # ==========================================
 
 import streamlit as st
@@ -120,7 +120,7 @@ r2 = r2_score(y_test, preds)
 
 cv = cross_val_score(model, X, y, cv=5, scoring='r2')
 
-st.subheader("📊 Evaluasi Model")
+st.subheader("Evaluasi Model")
 st.write(f"MAE: Rp {mae:,.0f}")
 st.write(f"R2 Score: {r2:.4f}")
 st.write(f"CV Mean R2: {cv.mean():.4f}")
@@ -128,7 +128,7 @@ st.write(f"CV Mean R2: {cv.mean():.4f}")
 # ==========================================
 # PREDIKSI
 # ==========================================
-st.subheader("💰 Hasil Prediksi")
+st.subheader("Hasil Prediksi")
 
 prediction = model.predict(input_df)
 
@@ -137,7 +137,7 @@ st.success(f"Estimasi Omzet: Rp {prediction[0]:,.0f}")
 # ==========================================
 # FEATURE IMPORTANCE
 # ==========================================
-st.subheader("📈 Faktor Paling Berpengaruh")
+st.subheader("Faktor Paling Berpengaruh")
 
 feat_names = numeric + list(
     model.named_steps['prep']
