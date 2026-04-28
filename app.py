@@ -1,10 +1,18 @@
 import streamlit as st
 import pandas as pd
-import folium
-from streamlit_folium import st_folium
 
 from modules.data_loader import load_data
 from modules.model import train_model, predict
+from modules.map_utils import (
+    create_map,
+    add_user_marker,
+    add_data_points,
+    render_map,
+    get_clicked_location
+)
+
+from sklearn.model_selection import train_test_split, cross_val_score
+from sklearn.metrics import mean_absolute_error, r2_score
 
 st.set_page_config(layout="wide")
 
@@ -27,19 +35,23 @@ model_choice = st.sidebar.selectbox(
 model, features, preprocessor = train_model(df, model_choice)
 
 # ==========================================
-# MAP CLICK (LAT LONG)
+# MAP
 # ==========================================
 st.subheader("🗺️ Klik Peta untuk Pilih Lokasi")
 
-m = folium.Map(location=[-6.2, 106.8], zoom_start=10)
-map_data = st_folium(m, width=700, height=500)
+m = create_map()
 
-if map_data["last_clicked"]:
-    lat = map_data["last_clicked"]["lat"]
-    lon = map_data["last_clicked"]["lng"]
-    st.success(f"📍 Lokasi: {lat:.6f}, {lon:.6f}")
-else:
-    lat, lon = -6.2, 106.8
+# tampilkan cabang
+add_data_points(m, df)
+
+map_data = render_map(m)
+
+lat, lon = get_clicked_location(map_data)
+
+# marker user
+add_user_marker(m, lat, lon)
+
+st.success(f"📍 Lokasi: {lat:.6f}, {lon:.6f}")
 
 # ==========================================
 # INPUT DATA
@@ -76,11 +88,8 @@ st.subheader("💰 Hasil Prediksi")
 st.success(f"Estimasi Omzet: Rp {prediction[0]:,.0f}")
 
 # ==========================================
-# EVALUASI MODEL
+# EVALUASI
 # ==========================================
-from sklearn.model_selection import train_test_split, cross_val_score
-from sklearn.metrics import mean_absolute_error, r2_score
-
 X = df[features]
 y = df['avg_omzet']
 
@@ -122,5 +131,5 @@ else:
 # ==========================================
 # DATA PREVIEW
 # ==========================================
-with st.expander("📂 Lihat Sample Data"):
-    st.dataframe(df.head(20))
+with st.expander("📂 Lihat Data Cabang"):
+    st.dataframe(df[['nama_cabang','lat','lon','avg_omzet']].head(20))
