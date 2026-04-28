@@ -23,6 +23,14 @@ st.title("🗺️ Dashboard Prediksi Omzet & Analisis Lokasi")
 # ==========================================
 df = load_data()
 
+# ⚠️ WAJIB: pastikan kompetitor valid
+df = df.dropna(subset=['lat','lon','lat_komp','lon_komp'])
+
+df['lat'] = df['lat'].astype(float)
+df['lon'] = df['lon'].astype(float)
+df['lat_komp'] = df['lat_komp'].astype(float)
+df['lon_komp'] = df['lon_komp'].astype(float)
+
 # ==========================================
 # MODEL
 # ==========================================
@@ -40,7 +48,7 @@ model, features = train_model(df, model_choice)
 col1, col2 = st.columns([2,1])
 
 # ==========================================
-# 🗺️ MAP + HEATMAP + KOMPETITOR
+# 🗺️ MAP + HEATMAP + KOMPETITOR (FIX)
 # ==========================================
 with col1:
     st.subheader("🗺️ Peta Lokasi & Analisis Kompetitor")
@@ -48,29 +56,24 @@ with col1:
     center_lat = df['lat'].mean()
     center_lon = df['lon'].mean()
 
+    # MAP AWAL
     m = folium.Map(location=[center_lat, center_lon], zoom_start=11)
 
-    # 🔥 HEATMAP OMZET
-    heat_data = [
-        [row['lat'], row['lon'], row['avg_omzet']]
-        for _, row in df.iterrows()
-    ]
+    # HEATMAP
+    heat_data = [[row['lat'], row['lon'], row['avg_omzet']] for _, row in df.iterrows()]
     HeatMap(heat_data, radius=15).add_to(m)
 
-    # 🔵 MARKER CABANG
+    # MARKER CABANG
     for _, row in df.iterrows():
         folium.CircleMarker(
             location=[row['lat'], row['lon']],
-            radius=6,
-            popup=f"""
-            <b>{row.get('nama_cabang','Cabang')}</b><br>
-            Omzet: Rp {row['avg_omzet']:,.0f}
-            """,
+            radius=5,
             color='blue',
-            fill=True
+            fill=True,
+            popup=f"Omzet: Rp {row['avg_omzet']:,.0f}"
         ).add_to(m)
 
-    # tampilkan map
+    # RENDER MAP (AMBIL CLICK)
     map_data = st_folium(m, width=800, height=500)
 
     clicked_lat, clicked_lon = None, None
@@ -79,14 +82,12 @@ with col1:
         clicked_lat = map_data["last_clicked"]["lat"]
         clicked_lon = map_data["last_clicked"]["lng"]
 
-        st.success(f"📍 Lokasi dipilih: {clicked_lat:.6f}, {clicked_lon:.6f}")
-
-    # ==========================================
-    # 🔥 ANALISIS KOMPETITOR TERDEKAT
-    # ==========================================
+# ==========================================
+# 🔥 MAP DETAIL (CABANG vs KOMPETITOR)
+# ==========================================
     if clicked_lat is not None:
 
-        # cari cabang terdekat dari titik klik
+        # cari cabang terdekat
         df['distance_click'] = (
             (df['lat'] - clicked_lat)**2 + (df['lon'] - clicked_lon)**2
         )
@@ -99,36 +100,35 @@ with col1:
         komp_lat = nearest['lat_komp']
         komp_lon = nearest['lon_komp']
 
-        # marker cabang
+        # MAP BARU (INI KUNCI)
+        m2 = folium.Map(location=[cabang_lat, cabang_lon], zoom_start=14)
+
+        # CABANG
         folium.Marker(
             [cabang_lat, cabang_lon],
             popup="Cabang Terpilih",
             icon=folium.Icon(color="blue")
-        ).add_to(m)
+        ).add_to(m2)
 
-        # marker kompetitor
+        # KOMPETITOR
         folium.Marker(
             [komp_lat, komp_lon],
             popup="Kompetitor Terdekat",
             icon=folium.Icon(color="red")
-        ).add_to(m)
+        ).add_to(m2)
 
-        # garis penghubung
+        # GARIS
         folium.PolyLine(
-            locations=[[cabang_lat, cabang_lon], [komp_lat, komp_lon]],
+            [[cabang_lat, cabang_lon], [komp_lat, komp_lon]],
             color="red",
-            weight=3
-        ).add_to(m)
+            weight=4
+        ).add_to(m2)
 
-        # hitung jarak sederhana
-        distance = np.sqrt(
-            (cabang_lat - komp_lat)**2 + (cabang_lon - komp_lon)**2
-        )
+        st.success(f"📍 Cabang: {cabang_lat:.6f}, {cabang_lon:.6f}")
+        st.warning(f"🏪 Kompetitor: {komp_lat:.6f}, {komp_lon:.6f}")
 
-        st.info(f"📏 Jarak ke kompetitor: {distance:.4f} (derajat koordinat)")
-
-        # render ulang map
-        st_folium(m, width=800, height=500)
+        # tampilkan map detail
+        st_folium(m2, width=800, height=500)
 
     else:
         clicked_lat, clicked_lon = -6.2, 106.8
@@ -191,27 +191,6 @@ colA, colB, colC = st.columns(3)
 colA.metric("MAE", f"Rp {mae:,.0f}")
 colB.metric("R2", f"{r2:.3f}")
 colC.metric("CV Score", f"{cv.mean():.3f}")
-
-# ==========================================
-# 📈 FEATURE IMPORTANCE
-# ==========================================
-st.subheader("📈 Faktor Penting")
-
-categorical = ['kategori_wilayah','jalan']
-numeric = [f for f in features if f not in categorical]
-
-feat_names = numeric + list(
-    model.named_steps['prep']
-    .named_transformers_['cat']
-    .get_feature_names_out(categorical)
-)
-
-if model_choice == "Random Forest":
-    importances = model.named_steps['model'].feature_importances_
-    st.bar_chart(pd.Series(importances, index=feat_names).sort_values(ascending=False).head(10))
-else:
-    coef = model.named_steps['model'].coef_
-    st.bar_chart(pd.Series(coef, index=feat_names).sort_values(ascending=False).head(10))
 
 # ==========================================
 # DATA
