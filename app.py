@@ -19,7 +19,7 @@ from sklearn.pipeline import Pipeline
 # ==========================================
 st.set_page_config(page_title="Prediksi Omzet", layout="wide")
 
-st.title("📊 Prediksi Omzet Lokasi Usaha")
+st.title("Prediksi Omzet Lokasi Usaha")
 st.write("Simulasi prediksi omzet berdasarkan data lokasi dan lingkungan")
 
 # ==========================================
@@ -44,7 +44,7 @@ df = load_data()
 # ==========================================
 # SIDEBAR (INPUT USER)
 # ==========================================
-st.sidebar.header("📥 Input Data Lokasi")
+st.sidebar.header("Input Data Lokasi")
 
 def user_input():
     data = {
